@@ -1,0 +1,10 @@
+build/
+bin/
+*.o
+*.obj
+kvdbase
+teste
+.vscode/
+.idea/
+*.swp
+.DS_Store
