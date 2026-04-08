@@ -23,7 +23,8 @@ typedef struct {
     uint root;
     uint numPages;
     uint height;
-    uint freePage; // -> The next page added will use this value
+    uint freePageId; // -> The next page added will use this value
+    uint nextPageId;
 } Header;
 
 
@@ -40,8 +41,12 @@ public:
 
     Page get(const uint id);
     void update(const Page &page);
-    void newPage(const Page &page);
+    uint allocatePage(); // When a page is added, returns the id number and the page is allocated in memory
+    uint getHeaderFreeId();
 
 private:
     std::fstream file;
+    Header readHeader();
+    void writeHeader(Header &header);
+
 };
