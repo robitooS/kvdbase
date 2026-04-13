@@ -42,6 +42,8 @@ public:
     void update(const Page &page);
     uint allocatePage(); // When a page is added, returns the id number and the page is allocated in memory
     uint getHeaderFreeId();
+    uint getRootId();
+    void writeRootId(const uint id);
 
 private:
     std::fstream file;

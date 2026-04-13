@@ -69,6 +69,20 @@ uint Pager::getHeaderFreeId()
     return header.freePageId;
 }
 
+uint Pager::getRootId()
+{   
+    auto header = readHeader();
+    return header.root;
+}
+
+void Pager::writeRootId(const uint id)
+{
+    auto header = readHeader();
+    header.root = id;
+    
+    writeHeader(header);
+}
+
 Header Pager::readHeader()
 {
     Header h;
