@@ -2,11 +2,16 @@
 
 Pager::Pager(std::string filename)
 {
-    file.open(filename, std::ios::out | std::ios::in);
-    Header header = {-1, 0, 0, 1, 1};
+    // We need to verificate if the file exists
+    file.open(filename, std::ios::out | std::ios::in | std::ios::binary);
+    if (!file.is_open()) {
+        file.open(filename, std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
 
-    // Writing the header's content
-    file.write(reinterpret_cast<char*>(&header), sizeof(header));
+        Header header = {-1, 0, 0, 1, 1};
+        writeHeader(header);
+    }
+
+    // If exists, just open the file
 
 }
 
@@ -17,9 +22,19 @@ Pager::~Pager()
         file.close();
 }
 
+Page Pager::get(const uint id)
+{
+    Page p;
+    auto offset = sizeof(Header) + (id - 1) * sizeof(Page);
+
+    file.seekg(offset);
+    file.read(reinterpret_cast<char*>(&p), sizeof(Page));
+
+    return p;
+}
+
 void Pager::update(const Page &page)
 {
-    file.seekp(0, std::ios::beg);
     auto offset = sizeof(Header) + (page.id - 1) * sizeof(Page);
 
     file.seekp(offset);
@@ -30,18 +45,22 @@ void Pager::update(const Page &page)
 
 uint Pager::allocatePage()
 {
-    Header header = readHeader();
+    auto header = readHeader();
 
     if (header.freePageId != 0) {
         auto id = header.freePageId;
+        auto page = get(id);
 
-        header.freePageId = 0;
+        header.freePageId = page.nextFreeId;
+        writeHeader(header);
+
         return id;
-    } 
+    }
 
+    auto id = header.nextPageId;
     header.nextPageId++;
-    return header.nextPageId;
-
+    writeHeader(header);
+    return id;
 };
 
 uint Pager::getHeaderFreeId()

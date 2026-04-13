@@ -1,8 +1,7 @@
 #pragma once
 
-#define PAGE_NUM_SIZE 4096 // max size of one page
+#define DATA_SIZE 4088
 #define NUM_MAX_PAGES 100  // max number of pages in RAM
-#define ORDER 512
 
 #include <string>
 #include <fstream>
@@ -11,12 +10,12 @@
 
 using uint = unsigned int;
 
-typedef struct
-{
+// The max size of the page should be 4096 bytes
+// 2 * 4(uint) + 4088 = 4096
+typedef struct {
     uint id;
-    int keys[ORDER];
-    int values[ORDER + 1];
-    bool is_leaf;
+    uint nextFreeId;
+    char data[DATA_SIZE];
 } Page;
 
 typedef struct {
