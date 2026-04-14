@@ -25,6 +25,49 @@ BplusTree::BplusTree(Pager &pager) : m_pager(pager)
 
 void BplusTree::insert(const int key, const int value)
 {
+    auto curr_id = rootId;
+
+    while(true) {
+        Page page = m_pager.get(curr_id);
+        bool is_leaf = reinterpret_cast<LeafNode*>(page.data)->is_leaf;
+
+        if (is_leaf) {
+            LeafNode* node = reinterpret_cast<LeafNode*>(page.data);
+
+            int i = 0;
+            while (i < node->numKeys && node->keys[i] < key) {
+                i++;
+            }
+            
+            if (i < node->numKeys && node->keys[i] == key) {
+                node->values[i] = value;
+                m_pager.update(page);
+                break;
+            }
+
+            for (int j = node->numKeys; j > i; j--) {
+                node->keys[j] = node->keys[j - 1];
+                node->values[j] = node-> values[j - 1];
+            }
+            
+            node->keys[i] = key;
+            node->values[i] = value;
+            node->numKeys++;
+
+            m_pager.update(page);
+            break;
+
+        } else {
+            InternalNode* node = reinterpret_cast<InternalNode*>(page.data);
+
+            int i = 0;
+            while (i < node->numKeys && key >= node->keys[i]) {
+                i++;
+            }
+
+            curr_id = node->children_id[i];
+        }
+    }
 }
 
 // i think this will work
