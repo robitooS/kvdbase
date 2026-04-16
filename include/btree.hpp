@@ -4,6 +4,7 @@
 #include "pager.hpp"
 #include <string>
 #include <optional>
+#include <stack>
 
 using uint = unsigned int;
 
