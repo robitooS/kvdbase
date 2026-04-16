@@ -1,19 +1,19 @@
 #pragma once
 
-#include <mutex>
+#include "btree.hpp"
+#include "pager.hpp"
 #include <string>
-#include <unordered_map>
 #include <optional>
 
 class KVdbase {
     public:
-        KVdbase() = default;
+        KVdbase(const std::string& filename);
 
-        std::optional<std::string> get(const std::string& key) const; // get method   
-        bool put(const std::string& key, const std::string& value); // put method
-        bool remove(const std::string& key); // del method 
+        std::optional<int> get(int key);
+        void put(int key, int value);
+        bool remove(int key);
 
     private:
-        std::unordered_map<std::string, std::string> m_data;
-        mutable std::mutex m_mutex;
+        Pager m_pager;
+        BplusTree m_tree;
 };

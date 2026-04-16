@@ -38,5 +38,5 @@ class BplusTree
     
     private:
         Pager& m_pager;
-        uint rootId;
+        int rootId;
 };

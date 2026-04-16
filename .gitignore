@@ -8,3 +8,6 @@ teste
 .idea/
 *.swp
 .DS_Store
+test.db
+kvdbase.exe
+a.out
