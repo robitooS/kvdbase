@@ -19,7 +19,7 @@ typedef struct {
 } Page;
 
 typedef struct {
-    uint root;
+    int root;
     uint numPages;
     uint height;
     uint freePageId; // -> The next page added will use this value
@@ -40,10 +40,11 @@ public:
 
     Page get(const uint id);
     void update(const Page &page);
-    uint allocatePage(); // When a page is added, returns the id number and the page is allocated in memory
+    uint allocatePage(); 
+    void deallocatePage(const uint id);
     uint getHeaderFreeId();
-    uint getRootId();
-    void writeRootId(const uint id);
+    int getRootId();
+    void writeRootId(const int id);
 
 private:
     std::fstream file;
