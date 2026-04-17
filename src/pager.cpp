@@ -20,6 +20,7 @@ Pager::~Pager()
 
 Page Pager::get(const uint id)
 {
+    file.clear();
     Page p;
     std::memset(&p, 0, sizeof(Page));
     auto offset = sizeof(Header) + (id - 1) * sizeof(Page);
@@ -30,10 +31,10 @@ Page Pager::get(const uint id)
 
 void Pager::update(const Page &page)
 {
+    file.clear();
     auto offset = sizeof(Header) + (page.id - 1) * sizeof(Page);
     file.seekp(offset);
     file.write(reinterpret_cast<const char*>(&page), sizeof(Page));
-    file.flush();
 }
 
 uint Pager::allocatePage()
@@ -88,5 +89,4 @@ void Pager::writeHeader(Header &header)
 {
     file.seekp(0, std::ios::beg);
     file.write(reinterpret_cast<char*>(&header), sizeof(Header));
-    file.flush();
 }

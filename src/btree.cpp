@@ -25,157 +25,155 @@ BplusTree::BplusTree(Pager &pager) : m_pager(pager)
         this->rootId = root;
     }
 }
-
-void BplusTree::insert(const int key, const int value)
-{
+void BplusTree::insert(const int key, const int value) {
     auto curr_id = rootId;
     std::stack<uint> parents;
 
-    while (true)
-    {
+    while (true) {
         Page page = m_pager.get(curr_id);
-        bool is_leaf = reinterpret_cast<LeafNode *>(page.data)->is_leaf;
+        LeafNode *node = reinterpret_cast<LeafNode *>(page.data);
 
-        if (is_leaf)
-        {
-            LeafNode *node = reinterpret_cast<LeafNode *>(page.data);
+        if (node->is_leaf) {
+            int i = 0;
+            while (i < node->numKeys && node->keys[i] < key) i++;
 
-            if (node->numKeys < ORDER)
-            {
-                int i = 0;
-                while (i < node->numKeys && node->keys[i] < key) i++;
-
-                if (i < node->numKeys && node->keys[i] == key) {
-                    node->values[i] = value;
-                } else {
-                    for (int j = node->numKeys; j > i; j--) {
-                        node->keys[j] = node->keys[j - 1];
-                        node->values[j] = node->values[j - 1];
-                    }
-                    node->keys[i] = key;
-                    node->values[i] = value;
-                    node->numKeys++;
-                }
+            if (i < node->numKeys && node->keys[i] == key) {
+                node->values[i] = value;
                 m_pager.update(page);
-                break;
+                return;
             }
-            else
-            {
+
+            if (node->numKeys < ORDER) {
+                for (int j = node->numKeys; j > i; j--) {
+                    node->keys[j] = node->keys[j - 1];
+                    node->values[j] = node->values[j - 1];
+                }
+                node->keys[i] = key;
+                node->values[i] = value;
+                node->numKeys++;
+                m_pager.update(page);
+                return;
+            } else {
                 uint id_newleaf = m_pager.allocatePage();
-                Page new_page;
-                new_page.id = id_newleaf;
-                LeafNode *new_node = reinterpret_cast<LeafNode *>(new_page.data);
-
+                Page new_pg = m_pager.get(id_newleaf);
+                LeafNode *new_node = reinterpret_cast<LeafNode *>(new_pg.data);
                 new_node->is_leaf = true;
-                int mid = ORDER / 2;
-                new_node->numKeys = ORDER - mid;
 
+                int temp_keys[ORDER + 1];
+                int temp_vals[ORDER + 1];
+                
+                // Copy to temp arrays
+                for (int j = 0; j < ORDER; j++) {
+                    if (j < i) {
+                        temp_keys[j] = node->keys[j];
+                        temp_vals[j] = node->values[j];
+                    } else {
+                        temp_keys[j + 1] = node->keys[j];
+                        temp_vals[j + 1] = node->values[j];
+                    }
+                }
+                temp_keys[i] = key;
+                temp_vals[i] = value;
+
+                int mid = (ORDER + 1) / 2;
+                node->numKeys = mid;
+                for (int j = 0; j < mid; j++) {
+                    node->keys[j] = temp_keys[j];
+                    node->values[j] = temp_vals[j];
+                }
+
+                new_node->numKeys = (ORDER + 1) - mid;
                 for (int j = 0; j < new_node->numKeys; j++) {
-                    new_node->keys[j] = node->keys[mid + j];
-                    new_node->values[j] = node->values[mid + j];
+                    new_node->keys[j] = temp_keys[mid + j];
+                    new_node->values[j] = temp_vals[mid + j];
                 }
 
                 new_node->nextLeaf = node->nextLeaf;
                 node->nextLeaf = id_newleaf;
-                node->numKeys = mid;
-
-                LeafNode *target = (key >= new_node->keys[0]) ? new_node : node;
-
-                int i = 0;
-                while (i < target->numKeys && target->keys[i] < key) i++;
-                for (int j = target->numKeys; j > i; j--) {
-                    target->keys[j] = target->keys[j - 1];
-                    target->values[j] = target->values[j - 1];
-                }
-                target->keys[i] = key;
-                target->values[i] = value;
-                target->numKeys++;
 
                 m_pager.update(page);
-                m_pager.update(new_page);
+                m_pager.update(new_pg);
 
                 int promoted_key = new_node->keys[0];
                 uint new_child_id = id_newleaf;
 
                 while (!parents.empty()) {
-                    uint parent_id = parents.top();
-                    parents.pop();
-                    Page p_page = m_pager.get(parent_id);
-                    InternalNode *p_node = reinterpret_cast<InternalNode *>(p_page.data);
+                    uint p_id = parents.top(); parents.pop();
+                    Page p_pg = m_pager.get(p_id);
+                    InternalNode *p_node = reinterpret_cast<InternalNode *>(p_pg.data);
 
                     if (p_node->numKeys < ORDER) {
-                        int i = 0;
-                        while (i < p_node->numKeys && promoted_key >= p_node->keys[i]) i++;
-                        for (int j = p_node->numKeys; j > i; j--) p_node->keys[j] = p_node->keys[j - 1];
-                        for (int j = p_node->numKeys + 1; j > i + 1; j--) p_node->children_id[j] = p_node->children_id[j - 1];
-                        p_node->keys[i] = promoted_key;
-                        p_node->children_id[i + 1] = new_child_id;
+                        int pi = 0;
+                        while (pi < p_node->numKeys && promoted_key >= p_node->keys[pi]) pi++;
+                        for (int j = p_node->numKeys; j > pi; j--) p_node->keys[j] = p_node->keys[j - 1];
+                        for (int j = p_node->numKeys + 1; j > pi + 1; j--) p_node->children_id[j] = p_node->children_id[j - 1];
+                        p_node->keys[pi] = promoted_key;
+                        p_node->children_id[pi + 1] = new_child_id;
                         p_node->numKeys++;
-                        m_pager.update(p_page);
+                        m_pager.update(p_pg);
                         return;
                     }
 
                     uint id_newint = m_pager.allocatePage();
-                    Page new_p_page;
-                    new_p_page.id = id_newint;
-                    InternalNode *new_p_node = reinterpret_cast<InternalNode *>(new_p_page.data);
+                    Page new_p_pg = m_pager.get(id_newint);
+                    InternalNode *new_p_node = reinterpret_cast<InternalNode *>(new_p_pg.data);
                     new_p_node->is_leaf = false;
 
-                    int t_keys[ORDER + 1];
-                    uint t_child[ORDER + 2];
+                    int tk[ORDER + 1];
+                    uint tc[ORDER + 2];
                     int ki = 0;
-                    while (ki < ORDER && promoted_key >= p_node->keys[ki]) ki++;
-                    for (int j = 0, k = 0; j < ORDER + 1; j++) t_keys[j] = (j == ki) ? promoted_key : p_node->keys[k++];
-                    for (int j = 0, k = 0; j < ORDER + 2; j++) t_child[j] = (j == ki + 1) ? new_child_id : p_node->children_id[k++];
-
-                    int mid = (ORDER + 1) / 2;
-                    p_node->numKeys = mid;
-                    new_p_node->numKeys = ORDER - mid;
-                    for (int j = 0; j < p_node->numKeys; j++) p_node->keys[j] = t_keys[j];
-                    for (int j = 0; j < p_node->numKeys + 1; j++) p_node->children_id[j] = t_child[j];
+                    while (ki < p_node->numKeys && promoted_key >= p_node->keys[ki]) ki++;
                     
-                    int next_promoted = t_keys[mid];
-                    for (int j = 0; j < new_p_node->numKeys; j++) new_p_node->keys[j] = t_keys[mid + 1 + j];
-                    for (int j = 0; j < new_p_node->numKeys + 1; j++) new_p_node->children_id[j] = t_child[mid + 1 + j];
+                    // Copy keys
+                    for (int j = 0, k = 0; j < ORDER + 1; j++) {
+                        if (j == ki) tk[j] = promoted_key;
+                        else tk[j] = p_node->keys[k++];
+                    }
+                    // Copy ALL children pointers
+                    for (int j = 0, k = 0; j < ORDER + 2; j++) {
+                        if (j == ki + 1) tc[j] = new_child_id;
+                        else tc[j] = p_node->children_id[k++];
+                    }
 
-                    m_pager.update(p_page);
-                    m_pager.update(new_p_page);
-                    promoted_key = next_promoted;
+                    int m = (ORDER + 1) / 2;
+                    p_node->numKeys = m;
+                    for (int j = 0; j < m; j++) p_node->keys[j] = tk[j];
+                    for (int j = 0; j < m + 1; j++) p_node->children_id[j] = tc[j];
+
+                    int next_p = tk[m]; // This key goes up to the parent
+                    new_p_node->numKeys = ORDER - m;
+                    for (int j = 0; j < new_p_node->numKeys; j++) new_p_node->keys[j] = tk[m + 1 + j];
+                    for (int j = 0; j < new_p_node->numKeys + 1; j++) new_p_node->children_id[j] = tc[m + 1 + j];
+
+                    m_pager.update(p_pg);
+                    m_pager.update(new_p_pg);
+                    promoted_key = next_p;
                     new_child_id = id_newint;
                 }
 
-                uint id_root = m_pager.allocatePage();
-                Page r_page;
-
-                r_page.id = id_root;
-                InternalNode *r_node = reinterpret_cast<InternalNode *>(r_page.data);
-
+                uint r_id = m_pager.allocatePage();
+                Page r_pg = m_pager.get(r_id);
+                InternalNode *r_node = reinterpret_cast<InternalNode *>(r_pg.data);
                 r_node->is_leaf = false;
                 r_node->numKeys = 1;
                 r_node->keys[0] = promoted_key;
                 r_node->children_id[0] = rootId;
                 r_node->children_id[1] = new_child_id;
-                
-                m_pager.update(r_page);
-                m_pager.writeRootId(id_root);
-                rootId = id_root;
-                break;
+                m_pager.update(r_pg);
+                m_pager.writeRootId(r_id);
+                rootId = r_id;
+                return;
             }
         } else {
-            InternalNode *node = reinterpret_cast<InternalNode *>(page.data);
-
+            InternalNode *in = reinterpret_cast<InternalNode *>(page.data);
             int i = 0;
-            while (i < node->numKeys && key >= node->keys[i]) {
-                i++;
-            }
-
+            while (i < in->numKeys && key >= in->keys[i]) i++;
             parents.push(curr_id);
-            curr_id = node->children_id[i];
+            curr_id = in->children_id[i];
         }
     }
 }
 
-// i think this will work
 std::optional<int> BplusTree::search(const int key)
 {
     auto curr_id = rootId;
@@ -242,8 +240,43 @@ int BplusTree::remove(const int key)
     node->numKeys--;
     m_pager.update(page);
 
-    int minK = (ORDER + 1) / 2;
-    while (curr_id != rootId && node->numKeys < minK) {
+    if (idx == 0 && node->numKeys > 0 && !parents.empty()) {
+        std::stack<uint> p_copy = parents;
+        std::stack<int> i_copy = indices;
+        int new_key = node->keys[0];
+        while (!p_copy.empty()) {
+            uint pid = p_copy.top(); p_copy.pop();
+            int pidx = i_copy.top(); i_copy.pop();
+            if (pidx > 0) {
+                Page pg = m_pager.get(pid);
+                InternalNode* nd = (InternalNode*)pg.data;
+                nd->keys[pidx-1] = new_key;
+                m_pager.update(pg);
+                break;
+            }
+        }
+    }
+
+    int minLeaf = (ORDER + 1) / 2; 
+    int minInt  =  ORDER / 2;  
+
+
+    if (curr_id == rootId || node->numKeys >= minLeaf) {
+        return 1;  
+    }
+
+    bool is_curr_leaf = true;
+
+    while (curr_id != rootId) {
+        int minK = is_curr_leaf ? minLeaf : minInt;
+
+        Page curr_page = m_pager.get(curr_id);
+        int curr_numKeys = is_curr_leaf
+            ? reinterpret_cast<LeafNode*>(curr_page.data)->numKeys
+            : reinterpret_cast<InternalNode*>(curr_page.data)->numKeys;
+
+        if (curr_numKeys >= minK) break;
+
         uint p_id = parents.top(); parents.pop();
         int idx_p = indices.top(); indices.pop();
         Page p_pg = m_pager.get(p_id);
@@ -252,66 +285,103 @@ int BplusTree::remove(const int key)
         if (idx_p > 0) {
             uint s_id = p_nd->children_id[idx_p - 1];
             Page s_pg = m_pager.get(s_id);
-            LeafNode* s_nd = reinterpret_cast<LeafNode*>(s_pg.data);
-            if (s_nd->numKeys > minK) {
-                if (s_nd->is_leaf) {
-                    for (int i = node->numKeys; i > 0; i--) { node->keys[i] = node->keys[i-1]; node->values[i] = node->values[i-1]; }
-                    node->keys[0] = s_nd->keys[s_nd->numKeys-1]; node->values[0] = s_nd->values[s_nd->numKeys-1];
-                    node->numKeys++; s_nd->numKeys--; p_nd->keys[idx_p-1] = node->keys[0];
+            int s_numKeys = reinterpret_cast<LeafNode*>(s_pg.data)->numKeys;
+            int s_min = is_curr_leaf ? minLeaf : minInt;
+            if (s_numKeys > s_min) {
+                if (is_curr_leaf) {
+                    LeafNode* cn = reinterpret_cast<LeafNode*>(curr_page.data);
+                    LeafNode* sn = reinterpret_cast<LeafNode*>(s_pg.data);
+                    for (int i = cn->numKeys; i > 0; i--) { cn->keys[i] = cn->keys[i-1]; cn->values[i] = cn->values[i-1]; }
+                    cn->keys[0] = sn->keys[sn->numKeys-1];
+                    cn->values[0] = sn->values[sn->numKeys-1];
+                    cn->numKeys++; sn->numKeys--;
+                    p_nd->keys[idx_p-1] = cn->keys[0];
                 } else {
-                    InternalNode *in = (InternalNode*)node, *is = (InternalNode*)s_nd;
+                    InternalNode *in = reinterpret_cast<InternalNode*>(curr_page.data);
+                    InternalNode *is_nd = reinterpret_cast<InternalNode*>(s_pg.data);
                     for (int i = in->numKeys; i > 0; i--) in->keys[i] = in->keys[i-1];
                     for (int i = in->numKeys + 1; i > 0; i--) in->children_id[i] = in->children_id[i-1];
-                    in->keys[0] = p_nd->keys[idx_p-1]; in->children_id[0] = is->children_id[is->numKeys];
-                    p_nd->keys[idx_p-1] = is->keys[is->numKeys-1]; in->numKeys++; is->numKeys--;
+                    in->keys[0] = p_nd->keys[idx_p-1];
+                    in->children_id[0] = is_nd->children_id[is_nd->numKeys];
+                    p_nd->keys[idx_p-1] = is_nd->keys[is_nd->numKeys-1];
+                    in->numKeys++; is_nd->numKeys--;
                 }
-                m_pager.update(page); m_pager.update(s_pg); m_pager.update(p_pg); return 1;
+                m_pager.update(curr_page); m_pager.update(s_pg); m_pager.update(p_pg);
+                return 1;
             }
         }
+
         if (idx_p < p_nd->numKeys) {
             uint s_id = p_nd->children_id[idx_p + 1];
             Page s_pg = m_pager.get(s_id);
-            LeafNode* s_nd = reinterpret_cast<LeafNode*>(s_pg.data);
-            if (s_nd->numKeys > minK) {
-                if (s_nd->is_leaf) {
-                    node->keys[node->numKeys] = s_nd->keys[0]; node->values[node->numKeys] = s_nd->values[0];
-                    node->numKeys++;
-                    for (int i = 0; i < s_nd->numKeys-1; i++) { s_nd->keys[i] = s_nd->keys[i+1]; s_nd->values[i] = s_nd->values[i+1]; }
-                    s_nd->numKeys--; p_nd->keys[idx_p] = s_nd->keys[0];
+            int s_numKeys = reinterpret_cast<LeafNode*>(s_pg.data)->numKeys;
+            int s_min = is_curr_leaf ? minLeaf : minInt;
+            if (s_numKeys > s_min) {
+                if (is_curr_leaf) {
+                    LeafNode* cn = reinterpret_cast<LeafNode*>(curr_page.data);
+                    LeafNode* sn = reinterpret_cast<LeafNode*>(s_pg.data);
+                    cn->keys[cn->numKeys] = sn->keys[0];
+                    cn->values[cn->numKeys] = sn->values[0];
+                    cn->numKeys++;
+                    for (int i = 0; i < sn->numKeys-1; i++) { sn->keys[i] = sn->keys[i+1]; sn->values[i] = sn->values[i+1]; }
+                    sn->numKeys--;
+                    p_nd->keys[idx_p] = sn->keys[0];
                 } else {
-                    InternalNode *in = (InternalNode*)node, *is = (InternalNode*)s_nd;
-                    in->keys[in->numKeys] = p_nd->keys[idx_p]; in->children_id[in->numKeys+1] = is->children_id[0];
-                    p_nd->keys[idx_p] = is->keys[0];
-                    for (int i = 0; i < is->numKeys-1; i++) is->keys[i] = is->keys[i+1];
-                    for (int i = 0; i < is->numKeys; i++) is->children_id[i] = is->children_id[i+1];
-                    in->numKeys++; is->numKeys--;
+                    InternalNode *in = reinterpret_cast<InternalNode*>(curr_page.data);
+                    InternalNode *is_nd = reinterpret_cast<InternalNode*>(s_pg.data);
+                    in->keys[in->numKeys] = p_nd->keys[idx_p];
+                    in->children_id[in->numKeys+1] = is_nd->children_id[0];
+                    p_nd->keys[idx_p] = is_nd->keys[0];
+                    for (int i = 0; i < is_nd->numKeys-1; i++) is_nd->keys[i] = is_nd->keys[i+1];
+                    for (int i = 0; i <= is_nd->numKeys-1; i++) is_nd->children_id[i] = is_nd->children_id[i+1];
+                    in->numKeys++; is_nd->numKeys--;
                 }
-                m_pager.update(page); m_pager.update(s_pg); m_pager.update(p_pg); return 1;
+                m_pager.update(curr_page); m_pager.update(s_pg); m_pager.update(p_pg);
+                return 1;
             }
         }
+
+        // Merge
         int m_idx = (idx_p > 0) ? idx_p - 1 : idx_p;
         uint l_id = p_nd->children_id[m_idx], r_id = p_nd->children_id[m_idx+1];
         Page lp = m_pager.get(l_id), rp = m_pager.get(r_id);
-        LeafNode *ln = (LeafNode*)lp.data, *rn = (LeafNode*)rp.data;
-        if (ln->is_leaf) {
-            for (int i = 0; i < rn->numKeys; i++) { ln->keys[ln->numKeys+i] = rn->keys[i]; ln->values[ln->numKeys+i] = rn->values[i]; }
-            ln->numKeys += rn->numKeys; ln->nextLeaf = rn->nextLeaf;
+
+        if (is_curr_leaf) {
+            LeafNode *ln = reinterpret_cast<LeafNode*>(lp.data);
+            LeafNode *rn = reinterpret_cast<LeafNode*>(rp.data);
+            for (int i = 0; i < rn->numKeys; i++) {
+                ln->keys[ln->numKeys+i] = rn->keys[i];
+                ln->values[ln->numKeys+i] = rn->values[i];
+            }
+            ln->numKeys += rn->numKeys;
+            ln->nextLeaf = rn->nextLeaf;
         } else {
-            InternalNode *lin = (InternalNode*)ln, *rin = (InternalNode*)rn;
+            InternalNode *lin = reinterpret_cast<InternalNode*>(lp.data);
+            InternalNode *rin = reinterpret_cast<InternalNode*>(rp.data);
             lin->keys[lin->numKeys] = p_nd->keys[m_idx];
             for (int i = 0; i < rin->numKeys; i++) lin->keys[lin->numKeys+1+i] = rin->keys[i];
             for (int i = 0; i < rin->numKeys+1; i++) lin->children_id[lin->numKeys+1+i] = rin->children_id[i];
             lin->numKeys += rin->numKeys + 1;
         }
+
         for (int i = m_idx; i < p_nd->numKeys-1; i++) p_nd->keys[i] = p_nd->keys[i+1];
         for (int i = m_idx+1; i < p_nd->numKeys; i++) p_nd->children_id[i] = p_nd->children_id[i+1];
-        p_nd->numKeys--; m_pager.update(lp); m_pager.update(p_pg);
+        p_nd->numKeys--;
+        m_pager.update(lp); m_pager.update(p_pg);
         m_pager.deallocatePage(r_id);
-        curr_id = p_id; page = p_pg; node = (LeafNode*)p_nd;
+
+        curr_id = p_id;
+        is_curr_leaf = false;
     }
-    if (rootId == curr_id && !reinterpret_cast<LeafNode*>(page.data)->is_leaf && reinterpret_cast<InternalNode*>(page.data)->numKeys == 0) {
-        rootId = reinterpret_cast<InternalNode*>(page.data)->children_id[0];
+
+    Page root_page = m_pager.get(rootId);  // ✅ re-lê a raiz atualizada
+    if (!reinterpret_cast<LeafNode*>(root_page.data)->is_leaf &&
+         reinterpret_cast<InternalNode*>(root_page.data)->numKeys == 0) {
+        uint oldRoot = rootId;
+        rootId = reinterpret_cast<InternalNode*>(root_page.data)->children_id[0];
         m_pager.writeRootId(rootId);
+        m_pager.deallocatePage(oldRoot);
     }
+
     return 1;
 }
