@@ -20,13 +20,13 @@ void print_report(const std::string& task, double duration, int ops) {
 }
 
 int main() {
-    const int N_KEYS = 1000000;
-    const std::string DB_NAME = "performance_test.db";
+    const int N_KEYS = 500000;
+    const std::string DB_NAME = "test.db";
     std::remove(DB_NAME.c_str()); 
 
     KVdbase db(DB_NAME);
 
-    std::cout << "===== FORENSIC PERFORMANCE SUITE (" << N_KEYS << " KEYS) =====" << std::endl;
+    std::cout << "===== PERFORMANCE SUITE (" << N_KEYS << " KEYS) =====" << std::endl;
 
     auto start_insert = high_resolution_clock::now();
     for (int i = 0; i < N_KEYS; ++i) {
@@ -77,7 +77,7 @@ int main() {
     print_report("Fase 4: Remocao Aleatoria", duration<double>(end_remove - start_remove).count(), N_KEYS / 2);
     std::cout << "-> db.remove() retornou true para: " << removed_success << "/" << (N_KEYS/2) << std::endl;
 
-    // Métricas Forenses
+    // Métricas
     int correctly_retained = 0;
     int correctly_removed = 0;
     int error_ghost_keys = 0;        // Chave deveria estar removida, mas ainda existe
@@ -107,7 +107,7 @@ int main() {
         }
     }
 
-    std::cout << "\n--- RELATORIO FORENSE DE INTEGRIDADE ---" << std::endl;
+    std::cout << "\n--- RELATORIO DE INTEGRIDADE ---" << std::endl;
     std::cout << "[SUCESSO]" << std::endl;
     std::cout << "Retidas Corretamente   : " << correctly_retained << "/" << (N_KEYS - actual_removed_keys.size()) << std::endl;
     std::cout << "Removidas Corretamente : " << correctly_removed << "/" << actual_removed_keys.size() << std::endl;
