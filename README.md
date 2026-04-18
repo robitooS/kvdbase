@@ -1,4 +1,3 @@
-
 # kvdbase
 
 O kvdbase é um banco de dados chave-valor desenvolvido do zero em C++. Projetamos este sistema para salvar dados diretamente no disco físico de forma eficiente, sem a necessidade de carregar o banco inteiro na memória RAM.
@@ -12,6 +11,8 @@ O projeto é estruturado em três componentes principais:
 1. **Gerenciador de Disco (Pager):** O banco não lê ou escreve dados de forma aleatória. Ele divide o arquivo físico em blocos de 4 KB (Páginas). Quando você faz uma consulta, o Pager carrega para a memória apenas o bloco exato onde o dado está.
 2. **Árvore B+ (B+ Tree):** É o índice do banco. Em vez de varrer o arquivo do início ao fim procurando uma chave, a árvore guia o algoritmo de busca diretamente para a página correta no disco.
 3. **Controle de Concorrência:** O projeto está preparado para suporte a múltiplas threads (via flags de compilação), garantindo uma base sólida para futuras expansões de concorrência.
+
+![Arquitetura da Árvore B+](docs/bplustree.png)
 
 ## Como Iniciar
 
